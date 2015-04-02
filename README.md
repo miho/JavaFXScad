@@ -33,7 +33,6 @@ Call the `eclipse` task from the command line and import the project to your wor
 Call the `idea` task from the command line and open the project.
 
 ### Command Line
-
 Navigate to the [Gradle](http://www.gradle.org/) project (e.g., `path/to/JFXScad`) and enter the following command
 
 #### Bash (Linux/OS X/Cygwin/other Unix-like shell)
