@@ -5,146 +5,221 @@
  */
 package com.neuronrobotics.bowlerstudio;
 
-import eu.mihosoft.vrl.v3d.CSG;
-import eu.mihosoft.vrl.v3d.MeshContainer;
-import groovy.lang.Binding;
-import groovy.lang.GroovyShell;
-import groovy.lang.Script;
+import haar.HaarFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
 import java.io.PrintStream;
-import java.io.PrintWriter;
-import java.io.StringWriter;
-import java.io.UnsupportedEncodingException;
+import java.net.MalformedURLException;
 import java.net.URL;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.nio.file.WatchEvent;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.ResourceBundle;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
-import javafx.application.Platform;
-import javafx.embed.swing.SwingFXUtils;
-import javafx.event.ActionEvent;
-import javafx.fxml.FXML;
-import javafx.fxml.Initializable;
-import javafx.geometry.Bounds;
-import javafx.scene.Group;
-import javafx.scene.PerspectiveCamera;
-import javafx.scene.SceneAntialiasing;
-import javafx.scene.SnapshotParameters;
-import javafx.scene.SubScene;
-import javafx.scene.control.ScrollPane;
-import javafx.scene.control.TextArea;
-import javafx.scene.image.WritableImage;
-import javafx.scene.layout.Pane;
-import javafx.scene.paint.Color;
-import javafx.scene.paint.PhongMaterial;
-import javafx.scene.shape.Box;
-import javafx.scene.shape.CullFace;
-import javafx.scene.shape.MeshView;
-import javafx.scene.shape.Sphere;
-import javafx.scene.transform.Affine;
-import javafx.scene.transform.Rotate;
-import javafx.scene.transform.Scale;
-import javafx.scene.transform.Transform;
-import javafx.stage.FileChooser;
-
-import javax.imageio.ImageIO;
-import javax.usb.UsbDevice;
+import javax.swing.UIManager;
 
 import org.apache.commons.io.IOUtils;
-import org.codehaus.groovy.control.CompilerConfiguration;
-import org.codehaus.groovy.control.customizers.ImportCustomizer;
-import org.controlsfx.control.action.Action;
-import org.controlsfx.dialog.Dialogs;
-import org.fxmisc.richtext.CodeArea;
-import org.fxmisc.richtext.StyleSpansBuilder;
-import org.reactfx.Change;
-import org.reactfx.EventStream;
-import org.reactfx.EventStreams;
+import org.kohsuke.github.GHGist;
+import org.kohsuke.github.GHMyself;
+import org.kohsuke.github.GHRepository;
+import org.kohsuke.github.GitHub;
+import org.kohsuke.github.PagedIterable;
+import org.opencv.core.Core;
+import org.reactfx.util.FxTimer;
 
-import com.neuronrobotics.interaction.CadInteractionEvent;
-import com.neuronrobotics.sdk.addons.kinematics.AbstractKinematicsNR;
+import javafx.application.Platform;
+import javafx.event.ActionEvent;
+import javafx.event.EventHandler;
+import javafx.fxml.FXML;
+import javafx.fxml.FXMLLoader;
+import javafx.fxml.Initializable;
+import javafx.scene.Group;
+import javafx.scene.Parent;
+import javafx.scene.Scene;
+import javafx.scene.SubScene;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Alert.AlertType;
+import javafx.scene.control.CheckMenuItem;
+import javafx.scene.control.ChoiceDialog;
+import javafx.scene.control.MenuBar;
+import javafx.scene.control.MenuItem;
+import javafx.scene.control.ScrollPane;
+import javafx.scene.control.TextArea;
+import javafx.scene.control.TextInputDialog;
+import javafx.scene.input.KeyEvent;
+import javafx.scene.layout.Pane;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.VBox;
+import javafx.stage.FileChooser.ExtensionFilter;
+import javafx.stage.Modality;
+import javafx.stage.Stage;
+import javafx.stage.StageStyle;
+
+import com.neuronrobotics.bowlerstudio.creature.CreatureLab;
+import com.neuronrobotics.bowlerstudio.scripting.CommandLineWidget;
+import com.neuronrobotics.bowlerstudio.scripting.GithubLoginFX;
+import com.neuronrobotics.bowlerstudio.scripting.IGitHubLoginManager;
+import com.neuronrobotics.bowlerstudio.scripting.IGithubLoginListener;
+import com.neuronrobotics.bowlerstudio.scripting.ScriptingEngine;
+import com.neuronrobotics.bowlerstudio.scripting.ScriptingFileWidget;
+import com.neuronrobotics.bowlerstudio.scripting.ScriptingWidgetType;
+import com.neuronrobotics.bowlerstudio.threed.BowlerStudio3dEngine;
+import com.neuronrobotics.bowlerstudio.utils.BowlerStudioResourceFactory;
+import com.neuronrobotics.imageprovider.CHDKImageProvider;
+import com.neuronrobotics.imageprovider.NativeResource;
+import com.neuronrobotics.imageprovider.OpenCVJNILoader;
+import com.neuronrobotics.nrconsole.util.FileSelectionFactory;
+import com.neuronrobotics.nrconsole.util.GroovyFilter;
+import com.neuronrobotics.nrconsole.util.PromptForGist;
+import com.neuronrobotics.nrconsole.util.XmlFilter;
+import com.neuronrobotics.pidsim.LinearPhysicsEngine;
+import com.neuronrobotics.replicator.driver.NRPrinter;
+import com.neuronrobotics.replicator.driver.Slic3r;
+import com.neuronrobotics.sdk.pid.VirtualGenericPIDDevice;
+import com.neuronrobotics.sdk.util.ThreadUtil;
 import com.neuronrobotics.sdk.addons.kinematics.DHParameterKinematics;
-import com.neuronrobotics.sdk.addons.kinematics.ITaskSpaceUpdateListenerNR;
-import com.neuronrobotics.sdk.addons.kinematics.math.TransformNR;
-import com.neuronrobotics.sdk.common.Log;
-import com.neuronrobotics.sdk.dyio.DyIO;
-import com.neuronrobotics.sdk.dyio.dypid.DyPIDConfiguration;
-import com.neuronrobotics.sdk.dyio.peripherals.DigitalInputChannel;
-import com.neuronrobotics.sdk.javaxusb.UsbCDCSerialConnection;
-import com.neuronrobotics.sdk.pid.PIDConfiguration;
-import com.neuronrobotics.sdk.serial.SerialConnection;
-import com.neuronrobotics.sdk.ui.ConnectionDialog;
-import com.neuronrobotics.sdk.util.FileChangeWatcher;
-import com.neuronrobotics.sdk.util.IFileChangeListener;
+import com.neuronrobotics.sdk.addons.kinematics.MobileBase;
 import com.neuronrobotics.sdk.addons.kinematics.gui.*;
+import com.sun.crypto.provider.DHParameterGenerator;
+import com.sun.speech.freetts.VoiceManager;
+
+import javafx.scene.control.Menu;
 /**
  * FXML Controller class
  *
  * @author Michael Hoffer &lt;info@michaelhoffer.de&gt;
  */
-public class MainController implements Initializable, IFileChangeListener {
-
-    private static final String[] KEYWORDS = new String[]{
-        "def", "in", "as", "abstract", "assert", "boolean", "break", "byte",
-        "case", "catch", "char", "class", "const",
-        "continue", "default", "do", "double", "else",
-        "enum", "extends", "final", "finally", "float",
-        "for", "goto", "if", "implements", "import",
-        "instanceof", "int", "interface", "long", "native",
-        "new", "package", "private", "protected", "public",
-        "return", "short", "static", "strictfp", "super",
-        "switch", "synchronized", "this", "throw", "throws",
-        "transient", "try", "void", "volatile", "while"
-    };
-
-    private static final Pattern KEYWORD_PATTERN
-            = Pattern.compile("\\b(" + String.join("|", KEYWORDS) + ")\\b");
-
-
-
-    private final CodeArea codeArea = new CodeArea();
-
-    private boolean autoCompile = true;
-
-    private CSG csgObject;
-
+public class MainController implements Initializable {
+    private static int sizeOfTextBuffer = 40000;
+	static ByteArrayOutputStream out = new ByteArrayOutputStream();
+	static boolean opencvOk=true;
+    private static TextArea logViewRef=null;
+    private static String newString=null;
     @FXML
-    private TextArea logView;
+    private MenuBar menuBar;
+    @FXML
+    private MenuItem logoutGithub;
+    
+    @FXML
+    private Menu myGists;
+    
+    @FXML
+    private Pane logView;
 
     @FXML
     private ScrollPane editorContainer;
 
     @FXML
     private Pane viewContainer;
-
+    @FXML
+    private Pane jfx3dControls;
+    
     private SubScene subScene;
-    private Jfx3dManager jfx3dmanager ;
+    private BowlerStudio3dEngine jfx3dmanager ;
 
 	private File openFile;
 
-	private FileChangeWatcher watcher;
+	private BowlerStudioController application;
+	private Stage primaryStage;
+	
+    @FXML
+    private CheckMenuItem AddDefaultRightArm;
+    @FXML
+    private CheckMenuItem AddVRCamera;
+	private CommandLineWidget cmdLine;
+	@FXML Menu CreatureLabMenue;
+	private EventHandler<? super KeyEvent> normalKeyPessHandle;
+    
+	static{
+		PrintStream ps = new PrintStream(out);
+		//System.setErr(ps);
+		System.setOut(ps);
+		new Thread(){
+			public void run(){
+			       updateLog();
+					try{
+						OpenCVJNILoader.load();              // Loads the JNI (java native interface)
+					}catch(Exception e){
+						//e.printStackTrace();
+						opencvOk=false;
+						Alert alert = new Alert(AlertType.INFORMATION);
+						alert.setTitle("OpenCV missing");
+						alert.setHeaderText("Opencv library is missing");
+						alert.setContentText(e.getMessage());
+						alert .initModality(Modality.APPLICATION_MODAL);
+						alert.show();
+						e.printStackTrace();
+					}
+					if(NativeResource.isLinux()){
+						String [] possibleLocals = new String[]{
+								"/usr/local/share/OpenCV/java/lib"+Core.NATIVE_LIBRARY_NAME+".so",
+								"/usr/lib/jni/lib"+Core.NATIVE_LIBRARY_NAME+".so"
+						};
+						Slic3r.setExecutableLocation("/usr/bin/slic3r");
+						
+					}else if(NativeResource.isWindows()){
+						String basedir =System.getenv("OPENCV_DIR");
+						if(basedir == null)
+							throw new RuntimeException("OPENCV_DIR was not found, environment variable OPENCV_DIR needs to be set");
+						System.err.println("OPENCV_DIR found at "+ basedir);
+						basedir+="\\..\\..\\..\\Slic3r_X64\\Slic3r\\slic3r.exe";
+						Slic3r.setExecutableLocation(basedir);
+						
+					}
+					try {
+						UIManager.setLookAndFeel(UIManager.getCrossPlatformLookAndFeelClassName());
+						// This is a workaround for #8 and is only relavent on osx
+						// it causes the SwingNodes not to load if not called way ahead of time
+						javafx.scene.text.Font.getFamilies();
+					} catch (Exception e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+					
+			}
+		}.start();
+	}
+	
+	private static void updateLog(){
+		if(logViewRef!=null){
+			String current;
+			String finalStr;
+			if(out.size()==0){
+				newString=null;
+			}else{
+				newString = out.toString();
+				out.reset();
+			}
+			if(newString!=null){
+				current = logViewRef.getText()+newString;
+				try{
+					finalStr =new String(current.substring(current.getBytes().length-sizeOfTextBuffer));
+				}catch (StringIndexOutOfBoundsException ex){
+					finalStr =current;
+				}
+				int strlen = finalStr.length()-1;
+				logViewRef.setText(finalStr);
+				Platform.runLater(()->logViewRef.positionCaret(strlen));
+			}
+			
+		}	
+		FxTimer.runLater(
+				Duration.ofMillis(100) ,() -> {
+
+					updateLog();					
+		});
+	}
 
 
-	private MeshContainer meshContainer;
+    //private final CodeArea codeArea = new CodeArea();
 
-	private MeshView meshView;
 
-	private PrintStream orig= System.out;;
+
+	
     /**
      * Initializes the controller class.
      *
@@ -153,129 +228,190 @@ public class MainController implements Initializable, IFileChangeListener {
      */
     @Override
     public void initialize(URL url, ResourceBundle rb) {
+		ScriptingEngine.setLoginManager(new IGitHubLoginManager() {
+			
+			@Override
+			public String[] prompt(String username) {
+				System.err.println("Calling login from BowlerStudio");
+				//new RuntimeException().printStackTrace();
+				FXMLLoader fxmlLoader = BowlerStudioResourceFactory.getGithubLogin();
+				Parent root = fxmlLoader.getRoot();
+				GithubLoginFX controller = fxmlLoader.getController();
+				Platform.runLater(()->{
+					controller.reset();
+					controller.getUsername().setText(username);
+					Stage stage = new Stage(); 
+					stage.setTitle("GitHub Login");
+					stage.initModality(Modality.APPLICATION_MODAL);  
+					controller.setStage(stage, root);
+					stage.centerOnScreen();
+					stage.show();
+					
+				});
+				
+		        //setContent(root);
+				while(!controller.isDone()){
+					ThreadUtil.wait(1);
+				}
+				String[] creds = controller.getCreds();
+				controller.reset();
+				return creds;
+			}
+		});
 
-        //
-        codeArea.textProperty().addListener(
-                (ov, oldText, newText) -> {
-                    Matcher matcher = KEYWORD_PATTERN.matcher(newText);
-                    int lastKwEnd = 0;
-                    StyleSpansBuilder<Collection<String>> spansBuilder
-                    = new StyleSpansBuilder<>();
-                    while (matcher.find()) {
-                        spansBuilder.add(Collections.emptyList(),
-                                matcher.start() - lastKwEnd);
-                        spansBuilder.add(Collections.singleton("keyword"),
-                                matcher.end() - matcher.start());
-                        lastKwEnd = matcher.end();
-                    }
-                    spansBuilder.add(Collections.emptyList(),
-                            newText.length() - lastKwEnd);
-                    codeArea.setStyleSpans(0, spansBuilder.create());
-                });
+    	jfx3dmanager = new BowlerStudio3dEngine();
+    	
 
-        EventStream<Change<String>> textEvents
-                = EventStreams.changesOf(codeArea.textProperty());
-
-        textEvents.reduceSuccessions((a, b) -> b, Duration.ofMillis(500)).
-                subscribe(code -> {
-                    if (autoCompile) {
-                        compile(code.getNewValue());
-                    }
-                });
-
-        codeArea.replaceText(
-                "\n"
-                + "CSG cube = new Cube(20).toCSG()\n"
-                + "CSG sphere = new Sphere(12.5).toCSG()\n"
-                + "\n"
-                + "cube.difference(sphere)");
-
-        editorContainer.setContent(codeArea);
-        jfx3dmanager = new Jfx3dManager();
+        setApplication(new BowlerStudioController(jfx3dmanager, this));
+        editorContainer.setContent(getApplication());
+        
+        
         subScene = jfx3dmanager.getSubScene();
+        subScene.setFocusTraversable(false);
+        
+        
+        subScene.setOnMouseEntered(mouseEvent -> {
+			//System.err.println("3d window requesting focus");
+			Scene topScene = BowlerStudio.getScene();
+			normalKeyPessHandle = topScene.getOnKeyPressed();
+			jfx3dmanager.handleKeyboard(topScene);
+		});
+        
+        subScene.setOnMouseExited(mouseEvent -> {
+			//System.err.println("3d window dropping focus");
+			Scene topScene = BowlerStudio.getScene();
+			topScene.setOnKeyPressed(normalKeyPessHandle);
+		});
+        
         subScene.widthProperty().bind(viewContainer.widthProperty());
         subScene.heightProperty().bind(viewContainer.heightProperty());
-
+        jfx3dControls.getChildren().add(jfx3dmanager.getControlsBox());
         viewContainer.getChildren().add(subScene);
 
-        System.out.println("Starting Application");
-    }
+        System.out.println("Welcome to BowlerStudio!");
+		new Thread(){
+			public void run(){
+				setName("Load Haar Thread");
+				try{
+					HaarFactory.getStream(null);
+				}catch (Exception ex){}
+			}
+		}.start();
+		
+//		getAddDefaultRightArm().setOnAction(event -> {
+//			
+//			application.onAddDefaultRightArm(event);
+//		});
+//		getAddVRCamera().setOnAction(event -> {
+//			if(AddVRCamera.isSelected())
+//				application.onAddVRCamera(event);
+//		});
+		
+		FxTimer.runLater(
+				Duration.ofMillis(100) ,() -> {
+					if(ScriptingEngine.getLoginID()!=null){
+						setToLoggedIn(ScriptingEngine.getLoginID());
+					}else{
+						setToLoggedOut();
+					}
+												
+		});
 
- 
-
-	private void setCode(String code) {
-        codeArea.replaceText(code);
-    }
-
-    private String getCode() {
-        return codeArea.getText();
-    }
-
-    private void clearLog() {
-        logView.setText("");
-    }
-
-    private void compile(String code) {
-
-        csgObject = null;
-
-        //clearLog();
-        
-        StringWriter sw = new StringWriter();
-    	PrintWriter pw = new PrintWriter(sw);
-    	ByteArrayOutputStream out = new ByteArrayOutputStream();
+		ScriptingEngine.addIGithubLoginListener(new IGithubLoginListener() {
+			
+			@Override
+			public void onLogout(String oldUsername) {
+				setToLoggedOut();
+			}
+			
+			@Override
+			public void onLogin(String newUsername) {
+				setToLoggedIn(newUsername);
+				
+			}
+		});
+		//logView.resize(250, 300);
+		// after connection manager set up, add scripting widget
+    	logViewRef=new TextArea();
+    	logViewRef.prefWidthProperty().bind( logView.widthProperty().divide(2));
+    	logViewRef.prefHeightProperty().bind( logView.heightProperty().subtract(40));
     	
-        try {
+    	
+    	cmdLine = new CommandLineWidget();
+    	VBox box = new VBox();
+    	box.getChildren().add(logViewRef);
+    	box.getChildren().add(cmdLine);
+    	VBox.setVgrow(logViewRef, Priority.ALWAYS);
+    	box.prefWidthProperty().bind( logView.widthProperty().subtract(10));
+    	
+    	logView.getChildren().addAll(box);
+    	
 
-            CompilerConfiguration cc = new CompilerConfiguration();
-
-            cc.addCompilationCustomizers(
-                    new ImportCustomizer().
-                    addStarImports("eu.mihosoft.vrl.v3d",
-                            "eu.mihosoft.vrl.v3d.samples").
-                    addStaticStars("eu.mihosoft.vrl.v3d.Transform"));
-            
-            cc.addCompilationCustomizers(
-                    new ImportCustomizer().
-                    addStarImports("com.neuronrobotics.sdk.dyio",
-                            "com.neuronrobotics.sdk.common"));
-        	
-            Binding binding = new Binding();
-            System.setOut(new PrintStream(out));
-
-            GroovyShell shell = new GroovyShell(getClass().getClassLoader(),
-            		binding, cc);
-
-            Script script = shell.parse(code);
- 
-            Object obj = script.run();
-            
-            
-            if (obj instanceof CSG) {
-            	
-                CSG csg = (CSG) obj;
-
-                csgObject = csg;
-                //CadInteractionEvent interact =new CadInteractionEvent();
-                
-                meshContainer = csg.toJavaFXMesh(null);
-
-                meshView = jfx3dmanager.replaceObject(meshView, meshContainer.getAsMeshViews().get(0));
-
-                logView.setText("Compile OK\n"+logView.getText());
-
-            } else {
-            	logView.setText(">> no CSG object returned :(");
-            }
-
-        } catch (Throwable ex) {
-        	ex.printStackTrace(pw);
-        
-        }
-      	logView.setText(sw.toString()+logView.getText());
-      	logView.setText(out.toString()+logView.getText());
-      	
+    	
+		
+        //BowlerStudio.speak("Welcome to Bowler Studio");
     }
+    
+    private void setToLoggedIn(final String name){	
+    	//new Exception().printStackTrace();
+		FxTimer.runLater(
+				Duration.ofMillis(100) ,() -> {
+			logoutGithub.disableProperty().set(false);
+			logoutGithub.setText("Log out "+name);
+			new Thread(){
+				public void run(){
+					
+					GitHub github = ScriptingEngine.getGithub();
+					while(github==null){
+						github = ScriptingEngine.getGithub();
+						ThreadUtil.wait(20);
+					}
+					try {
+						GHMyself myself = github.getMyself();
+						PagedIterable<GHGist> gists = myself.listGists();
+						Platform.runLater(()->{
+							myGists.getItems().clear();
+						});
+						
+						for(GHGist gist:gists){
+							String desc = gist.getDescription();
+							if(desc==null || desc .length()==0){
+								desc = gist.getFiles().keySet().toArray()[0].toString();
+							}
+							MenuItem tmp =new MenuItem(desc);
+							tmp.setOnAction(event->{
+								String webURL = gist.getHtmlUrl();
+			    				try {
+									BowlerStudio.openUrlInNewTab(new URL(webURL));
+								} catch (MalformedURLException e) {
+									// TODO Auto-generated catch block
+									e.printStackTrace();
+								}
+			    			
+							});
+							Platform.runLater(()->{
+								myGists.getItems().add(tmp);
+							});
+							
+						}
+					} catch (Exception e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+				}
+			}.start();
+
+		});
+    }
+    
+    private void setToLoggedOut(){
+		Platform.runLater(() -> {
+			myGists.getItems().clear();
+			logoutGithub.disableProperty().set(true);
+			logoutGithub.setText("Anonymous");
+		});
+    }
+
 
     /**
      * Returns the location of the Jar archive or .class file the specified
@@ -316,270 +452,269 @@ public class MainController implements Initializable, IFileChangeListener {
     
     @FXML
     private void onLoadFile(ActionEvent e) {
-        FileChooser fileChooser = new FileChooser();
-        fileChooser.setTitle("Open JFXScad File");
-        fileChooser.getExtensionFilters().add(
-                new FileChooser.ExtensionFilter(
-                        "JFXScad files (*.jfxscad, *.groovy)",
-                        "*.jfxscad", "*.groovy"));
-        
+    	new Thread(){
+    		public void run(){
+    			setName("Load File Thread");
+    	    	openFile = FileSelectionFactory.GetFile(ScriptingEngine.getLastFile(),
+    					new ExtensionFilter("Groovy Scripts","*.groovy","*.java","*.txt"),
+    					new ExtensionFilter("Clojure","*.cloj","*.clj","*.txt","*.clojure"),
+    					new ExtensionFilter("Python","*.py","*.python","*.txt"),
+    					new ExtensionFilter("All","*.*"));
 
-        openFile = fileChooser.showOpenDialog(null);
-
-        if (openFile == null) {
-            return;
-        }
-
-        String fName = openFile.getAbsolutePath();
-
-        if (!fName.toLowerCase().endsWith(".groovy")
-                && !fName.toLowerCase().endsWith(".jfxscad")) {
-            fName += ".jfxscad";
-        }
-
-        try {
-            setCode(new String(Files.readAllBytes(Paths.get(fName)), "UTF-8"));
-            
-            if(watcher!=null){
-            	watcher.close();
-            }
-            watcher = new FileChangeWatcher(openFile);
-            watcher.addIFileChangeListener(this);
-            watcher.start();
-            
-        } catch (IOException ex) {
-            Logger.getLogger(MainController.class.getName()).
-                    log(Level.SEVERE, null, ex);
-        }
-        
-        
-        
+    	        if (openFile == null) {
+    	            return;
+    	        }
+    	        getApplication().createFileTab(openFile);
+    		}
+    	}.start();
     }
 
     @FXML
-    private void onSaveFile(ActionEvent e) {
-        FileChooser fileChooser = new FileChooser();
-        fileChooser.setTitle("Save JFXScad File");
-        fileChooser.getExtensionFilters().add(
-                new FileChooser.ExtensionFilter(
-                        "JFXScad files (*.jfxscad, *.groovy)",
-                        "*.jfxscad", "*.groovy"));
-        fileChooser.setInitialDirectory(openFile);
-        
-        File f = fileChooser.showSaveDialog(null);
-        
-        if (f == null) {
-            return;
-        }
-
-        String fName = f.getAbsolutePath();
-
-        if (!fName.toLowerCase().endsWith(".groovy")
-                && !fName.toLowerCase().endsWith(".jfxscad")) {
-            fName += ".jfxscad";
-        }
-
-        try {
-            Files.write(Paths.get(fName), getCode().getBytes("UTF-8"));
-        } catch (IOException ex) {
-            Logger.getLogger(MainController.class.getName()).
-                    log(Level.SEVERE, null, ex);
-        }
+    private void onConnect(ActionEvent e) {
+    	new Thread(){
+    		public void run(){
+    			setName("Load BowlerDevice Dialog Thread");
+    	    	ConnectionManager.addConnection();
+    		}
+    	}.start();
     }
-
+    
     @FXML
-    private void onExportAsSTLFile(ActionEvent e) {
-
-        if (csgObject == null) {
-            Action response = Dialogs.create()
-                    .title("Error")
-                    .message("Cannot export STL. There is no geometry :(")
-                    .lightweight()
-                    .showError();
-
-            return;
-        }
-
-        FileChooser fileChooser = new FileChooser();
-        fileChooser.setTitle("Export STL File");
-        fileChooser.getExtensionFilters().add(
-                new FileChooser.ExtensionFilter(
-                        "STL files (*.stl)",
-                        "*.stl"));
-
-        File f = fileChooser.showSaveDialog(null);
-
-        if (f == null) {
-            return;
-        }
-
-        String fName = f.getAbsolutePath();
-
-        if (!fName.toLowerCase().endsWith(".stl")) {
-            fName += ".stl";
-        }
-
-        try {
-            eu.mihosoft.vrl.v3d.FileUtil.write(
-                    Paths.get(fName), csgObject.toStlString());
-        } catch (IOException ex) {
-            Logger.getLogger(MainController.class.getName()).
-                    log(Level.SEVERE, null, ex);
-        }
+    private void onConnectVirtual(ActionEvent e) {
+    	
+    	ConnectionManager.addConnection(new VirtualGenericPIDDevice(10000),"virtual");
     }
 
-    @FXML
-    private void onExportAsPngFile(ActionEvent e) {
-
-        if (csgObject == null) {
-            Action response = Dialogs.create()
-                    .title("Error")
-                    .message("Cannot export PNG. There is no geometry :(")
-                    .lightweight()
-                    .showError();
-
-            return;
-        }
-
-        FileChooser fileChooser = new FileChooser();
-        fileChooser.setTitle("Export PNG File");
-        fileChooser.getExtensionFilters().add(
-                new FileChooser.ExtensionFilter(
-                        "Image files (*.png)",
-                        "*.png"));
-
-        File f = fileChooser.showSaveDialog(null);
-
-        if (f == null) {
-            return;
-        }
-        jfx3dmanager.saveToPng(f);
-    }
-
-    @FXML
-    private void onCompileAndRun(ActionEvent e) {
-        compile(getCode());
-    }
-
-    @FXML
-    private void onServoMountSample(ActionEvent e) {
-
-        try {
-            String code = IOUtils.toString(this.getClass().
-                    getResourceAsStream("ServoMount.jfxscad"),
-                    "UTF-8");
-            setCode(code);
-        } catch (IOException ex) {
-            Logger.getLogger(MainController.class.getName()).
-                    log(Level.SEVERE, null, ex);
-        }
-
-    }
-
-    @FXML
-    private void onBatteryHolderSample(ActionEvent e) {
-
-        try {
-            String code = IOUtils.toString(this.getClass().
-                    getResourceAsStream("BatteryHolder.jfxscad"),
-                    "UTF-8");
-            setCode(code);
-        } catch (IOException ex) {
-            Logger.getLogger(MainController.class.getName()).
-                    log(Level.SEVERE, null, ex);
-        }
-
-    }
-
-    @FXML
-    private void onWheelSample(ActionEvent e) {
-
-        try {
-            String code = IOUtils.toString(this.getClass().
-                    getResourceAsStream("Wheel.jfxscad"),
-                    "UTF-8");
-            setCode(code);
-        } catch (IOException ex) {
-            Logger.getLogger(MainController.class.getName()).
-                    log(Level.SEVERE, null, ex);
-        }
-
-    }
-
-    @FXML
-    private void onBreadBoardConnectorSample(ActionEvent e) {
-
-        try {
-            String code = IOUtils.toString(this.getClass().
-                    getResourceAsStream("BreadBoardConnector.jfxscad"),
-                    "UTF-8");
-            setCode(code);
-        } catch (IOException ex) {
-            Logger.getLogger(MainController.class.getName()).
-                    log(Level.SEVERE, null, ex);
-        }
-
-    }
-
-    @FXML
-    private void onBoardMountSample(ActionEvent e) {
-
-        try {
-            String code = IOUtils.toString(this.getClass().
-                    getResourceAsStream("BoardMount.jfxscad"),
-                    "UTF-8");
-            setCode(code);
-        } catch (IOException ex) {
-            Logger.getLogger(MainController.class.getName()).
-                    log(Level.SEVERE, null, ex);
-        }
-
-    }
-
+  
     @FXML
     private void onClose(ActionEvent e) {
         System.exit(0);
     }
 
-    @FXML
-    private void onAutoCompile(ActionEvent e) {
-        autoCompile = !autoCompile;
-    }
-
     public TextArea getLogView() {
-        return logView;
+        return logViewRef;
     }
-
-	@Override
-	public void onFileChange(File fileThatChanged, WatchEvent event) {
-		// TODO Auto-generated method stub
-		if(fileThatChanged.getAbsolutePath().contains(openFile.getAbsolutePath())){
-			System.out.println("Code in "+fileThatChanged.getAbsolutePath()+" changed");
-			Platform.runLater(new Runnable() {
-	            @Override
-	            public void run() {
-	            	try {
-						setCode(new String(Files.readAllBytes(Paths.get(fileThatChanged.getAbsolutePath())), "UTF-8"));
-					} catch (UnsupportedEncodingException e) {
-						// TODO Auto-generated catch block
-						e.printStackTrace();
-					} catch (IOException e) {
-						// TODO Auto-generated catch block
-						e.printStackTrace();
-					}
-	            }
-	       });
-
-		}else{
-			//System.out.println("Othr Code in "+fileThatChanged.getAbsolutePath()+" changed");
-		}
-	}
-
-
 
 	public void disconnect() {
-		jfx3dmanager.disconnect();
+
+		getApplication().disconnect();
 	}
+	
+	public void openUrlInNewTab(URL url){
+		getApplication().openUrlInNewTab(url);
+	}
+	
+
+
+	@FXML public void onConnectCHDKCamera(ActionEvent event) {
+		Platform.runLater(()->{
+			try {
+				ConnectionManager.addConnection(new CHDKImageProvider(),"cameraCHDK");
+			} catch (Exception e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		});
+	}
+
+
+
+	@FXML public void onConnectCVCamera(ActionEvent event) {
+   
+		Platform.runLater(()->ConnectionManager.onConnectCVCamera());
+  
+		
+	}
+
+
+	@FXML public void onConnectJavaCVCamera() {
+
+		Platform.runLater(()->ConnectionManager.onConnectJavaCVCamera());
+    
+	}
+
+
+	@FXML public void onConnectFileSourceCamera() {
+    	Platform.runLater(()->ConnectionManager.onConnectFileSourceCamera());
+
+	}
+
+
+	@FXML public void onConnectURLSourceCamera() {
+
+    	Platform.runLater(()->ConnectionManager.onConnectURLSourceCamera());
+
+	}
+
+
+	@FXML public void onConnectHokuyoURG(ActionEvent event) {
+		Platform.runLater(()->ConnectionManager.onConnectHokuyoURG());
+		
+	}
+
+
+	@FXML public void onConnectGamePad(ActionEvent event) {
+		Platform.runLater(()->ConnectionManager.onConnectGamePad("gamepad"));
+		
+	}
+
+
+//	public CheckMenuItem getAddVRCamera() {
+//		return AddVRCamera;
+//	}
+//
+//
+//	public void setAddVRCamera(CheckMenuItem addVRCamera) {
+//		AddVRCamera = addVRCamera;
+//	}
+//
+//
+//	public CheckMenuItem getAddDefaultRightArm() {
+//		return AddDefaultRightArm;
+//	}
+//
+//
+//	public void setAddDefaultRightArm(CheckMenuItem addDefaultRightArm) {
+//		AddDefaultRightArm = addDefaultRightArm;
+//	}
+
+
+	@FXML public void onLogin() {
+    	new Thread(){
+    		public void run(){
+    			setName("Login Gist Thread");
+    			try {
+    				ScriptingEngine.login();
+    			} catch (IOException e) {
+    				// TODO Auto-generated catch block
+    				e.printStackTrace();
+    			}
+    		}
+    	}.start();
+	
+	}
+
+
+	@FXML public void onLogout() {
+		ScriptingEngine.logout();
+	}
+
+
+	@FXML public void onConnectPidSim() {
+		LinearPhysicsEngine eng =new LinearPhysicsEngine();
+		eng.connect();
+		ConnectionManager.addConnection(eng,"engine");
+	}
+
+
+
+	@FXML public void onPrint(ActionEvent event) {
+		NRPrinter printer =(NRPrinter) ConnectionManager.pickConnectedDevice(NRPrinter.class);
+		if(printer!=null){
+			// run a print here
+		}
+		
+	}
+
+
+
+	@FXML public void onMobileBaseFromFile() {
+    	new Thread(){
+    		public void run(){
+    			setName("Load Mobile Base Thread");
+    	    	openFile = FileSelectionFactory.GetFile(ScriptingEngine.getLastFile(),
+    	    			new ExtensionFilter("MobileBase XML","*.xml","*.XML"));
+
+    	        if (openFile == null) {
+    	            return;
+    	        }
+    	        Platform.runLater(()->{
+    				try {
+    					MobileBase mb = new MobileBase(new FileInputStream(openFile));
+    					ConnectionManager.addConnection(mb,mb.getScriptingName());
+    				} catch (Exception e) {
+    					// TODO Auto-generated catch block
+    					e.printStackTrace();
+    				}
+    			});
+    		}
+    	}.start();
+		
+	}
+	
+	@FXML public void onRobotArm(ActionEvent event) {
+		loadMobilebaseFromGist("2b0cff20ccee085c9c36","TrobotLinks.xml");
+	}
+	@FXML public void onHexapod() {
+		loadMobilebaseFromGist("bcb4760a449190206170","CarlTheRobot.xml");
+	}
+	@FXML public void onGrasshopper() {
+		loadMobilebaseFromGist("a6cbefc11693162cf9d4","GrassHopper.xml");
+	}
+
+	@FXML public void onInputArm() {
+		loadMobilebaseFromGist("98892e87253005adbe4a","TrobotMaster.xml");
+	}
+	
+	@FXML public void onHumanoid() {
+		loadMobilebaseFromGist("a991ca954460c1ba9860","humanoid.xml");
+	}
+
+	@FXML public void onAddElephant() {
+		loadMobilebaseFromGist("aef13d65093951d13235","Elephant.xml");
+	}
+
+	public Menu getCreatureLabMenue() {
+		return CreatureLabMenue;
+	}
+
+	public void setCreatureLabMenue(Menu creatureLabMenue) {
+		CreatureLabMenue = creatureLabMenue;
+	}
+	
+	public void loadMobilebaseFromGist(String id,String file){
+		new Thread(){
+    		public void run(){
+				try {
+					BowlerStudio.openUrlInNewTab(new URL("https://gist.github.com/"+id));
+					String xmlContent = ScriptingEngine.codeFromGistID(id,file)[0];
+					MobileBase mb = new MobileBase(IOUtils.toInputStream(xmlContent, "UTF-8"));
+					
+					mb.setSelfSource(new String[]{id,file});
+					ConnectionManager.addConnection(mb,mb.getScriptingName());
+					
+				} catch (Exception e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+    		}
+    	}.start();
+	}
+
+	@FXML public void onMobileBaseFromGist() {
+
+		PromptForGist.prompt("Select a Creature From a Gist","bcb4760a449190206170",(gitsId, file) -> {
+			loadMobilebaseFromGist(gitsId,file);
+		});
+	}
+	
+	public ScriptingFileWidget createFileTab(File file){
+		return getApplication().createFileTab(file);
+	}
+
+	public BowlerStudioController getApplication() {
+		return application;
+	}
+
+	public void setApplication(BowlerStudioController application) {
+		this.application = application;
+	}
+
+	@FXML public void onAddCNC() {
+		loadMobilebaseFromGist("51a9e0bc4ee095b03979","CNC.xml");
+	}
+
+
 
 
 }
